@@ -1,4 +1,6 @@
-﻿namespace SyntaxAnalyzer;
+﻿using SyntaxAnalyzer.Exceptions;
+
+namespace SyntaxAnalyzer;
 
 public class InfixParser : ParserBase
 {
