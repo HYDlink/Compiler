@@ -11,7 +11,18 @@ public class SyntaxNode
 
     public override string ToString()
     {
-        return Input.Substring(Index, Length);
+        return $"<{Input.Substring(Index, Length)}, {NodeType}>";
+    }
+
+    public List<SyntaxNode> Children { get; set; } = new();
+
+    private void PrintRecursive(int tab = 0) {
+        System.Console.WriteLine(new string('\t', tab) + ToString());
+        Children.ForEach(n => n.PrintRecursive(tab + 1));
+    }
+
+    public void Print() {
+        PrintRecursive();
     }
 }
 

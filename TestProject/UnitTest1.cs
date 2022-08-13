@@ -16,4 +16,16 @@ public class Tests
         infix_parser.Parse();
         Assert.Pass();
     }
+
+    [Test]
+    public void TestSimpleLua()
+    {
+        var str = @";
+if then
+    while do
+    end
+end";
+        var lua_parser = new LuaParser(str);
+        lua_parser.Parse();
+    }
 }
