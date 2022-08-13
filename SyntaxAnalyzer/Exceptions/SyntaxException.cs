@@ -1,4 +1,4 @@
-namespace SyntaxAnalyzer;
+namespace SyntaxAnalyzer.Exceptions;
 
 public class SyntaxException : Exception
 {
