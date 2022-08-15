@@ -8,6 +8,8 @@ public abstract class ParserBase
     /// current parsing index
     /// </summary>
     public int CurIndex { get; protected set; } = 0;
+    public int CurLine { get; protected set; } = 1;
+    public int CurPosInLine { get; protected set; } = 1;
 
     public abstract void Parse();
 
