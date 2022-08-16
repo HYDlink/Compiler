@@ -1,8 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
+#
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestProject", "TestProject\TestProject.csproj", "{DE82A71F-B084-4013-B648-14254FD70922}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyntaxAnalyzer", "SyntaxAnalyzer\SyntaxAnalyzer.csproj", "{8F117FE4-2A6C-40CB-A9F7-75E2643E85C7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParserCombinator", "ParserCombinator\ParserCombinator.fsproj", "{E7BB4E7F-0D75-4D61-8A13-19C8255E0B38}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -18,5 +21,9 @@ Global
 		{8F117FE4-2A6C-40CB-A9F7-75E2643E85C7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8F117FE4-2A6C-40CB-A9F7-75E2643E85C7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8F117FE4-2A6C-40CB-A9F7-75E2643E85C7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E7BB4E7F-0D75-4D61-8A13-19C8255E0B38}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E7BB4E7F-0D75-4D61-8A13-19C8255E0B38}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E7BB4E7F-0D75-4D61-8A13-19C8255E0B38}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E7BB4E7F-0D75-4D61-8A13-19C8255E0B38}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
