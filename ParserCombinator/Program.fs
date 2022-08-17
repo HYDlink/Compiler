@@ -17,15 +17,6 @@ type ParseResult<'a> =
     | Success of 'a
     | Failure of string
 
-let pchar ch str =
-    if String.IsNullOrEmpty(str) then
-        Failure "No more input"
-    else if str.[0] = ch then
-        let remaining = str.[1..]
-        Success(ch, remaining)
-    else
-        Failure str
-
 type Parser<'a> = Parser of (string -> ParseResult<'a * string>)
 
 let run parser input =
@@ -122,15 +113,138 @@ let applyP fP xP =
 
 let ( <*> ) = applyP
 
+let lift2 fn pa pb =
+    returnP fn <*> pa <*> pb
+
+let rec sequence parserList =
+  // define the "cons" function, which is a two parameter function
+  let cons head tail = head::tail
+
+  // lift it to Parser World
+  let consP = lift2 cons
+
+  // process the list of parsers recursively
+  match parserList with
+  | [] ->
+    returnP []
+  | head::tail ->
+    consP head (sequence tail)
+
+let parseString str =
+    /// Helper to create a string from a list of chars
+    let charListToStr charList =
+        charList |> List.toArray |> System.String
+    
+    str
+    |> List.ofSeq
+    |> List.map parseChar
+    |> sequence
+    |>> charListToStr
+
+let startsWith (str:string) (prefix:string) =
+  str.StartsWith(prefix)
+
+let startsWithP =
+  lift2 startsWith
+
+let rec parseZeroOrMore parser input =
+    let firstResult = run parser input
+    match firstResult with
+    | Success (firstValue, remaining) ->
+        let (tailResult, result) = parseZeroOrMore parser remaining
+        (firstValue :: tailResult, result)
+    | Failure _ -> ([], input)
+
+let parseOneOrMore parser input =
+    let firstResult = run parser input
+    match firstResult with
+    | Success (firstValue, remaining) ->
+        let (tailResult, result) = parseZeroOrMore parser remaining
+        Success(firstValue :: tailResult, result)
+    | Failure f -> Failure f
+
+let many parser =
+    let innerFn input =
+        let result = parseZeroOrMore parser input
+        Success result
+    Parser innerFn
+
+let many1 parser =
+    let innerFn input =
+        let result = parseOneOrMore parser input
+        result
+    Parser innerFn
+
 let pa = parseChar 'a'
 let pb = parseChar 'b'
 let pab = pa .>>. pb
 let porab = anyOf [ 'a'; 'b' ]
 let lowerCase = anyOf [ 'a' .. 'z' ]
 
-(run pab "aba").ToString() |> printfn "%s"
-(run porab "aba").ToString() |> printfn "%s"
-(run porab "bba").ToString() |> printfn "%s"
+let tryParser parser input =
+    (run parser input).ToString()
+    |> printfn "%s"
 
-(run parseThreeDigits "123A").ToString()
-|> printfn "%s"
+tryParser pab "aba"
+tryParser porab "aba"
+tryParser porab "bba"
+
+tryParser parseThreeDigits "123A"
+
+let parseIf = parseString "if"
+
+tryParser parseIf "ifthen"
+
+let manyLower = many lowerCase
+let many1Lower = many1 lowerCase
+
+tryParser manyLower "abaB"
+tryParser many1Lower "abaB"
+tryParser many1Lower "|abaB"
+
+// try p, if p failed, returns None, otherwise return Some wrapped Parser result
+let opt p =
+    let some = p |>> Some
+    let none = returnP None
+    some .<>. none
+
+// only accept left parser result, ignore right
+let (.>>) pl pr =
+    // fst == fun (l, r) -> l
+    pl .>>. pr
+    |>> fst
+    
+// only accept right parser result, ignore left
+let (>>.) pl pr =
+    // snd == fun (l, r) -> r
+    pl .>>. pr
+    |>> snd
+
+let parseInt =
+    let resultToInt (sign, digitList) =
+        let i = digitList |> List.toArray |> System.String |> int
+        match sign with
+        | Some _ -> -i
+        | None -> i
+    let parseSign = parseChar '-' |> opt
+    parseSign .>>. (many1 parseDigit) |>> resultToInt
+
+tryParser parseInt "1ABC"  // Success (1, "ABC")
+tryParser parseInt "12BC"  // Success (12, "BC")
+tryParser parseInt "123C"  // Success (123, "C")
+tryParser parseInt "1234"  // Success (1234, "")
+tryParser parseInt "-1234" // Success (-1234, "")
+tryParser parseInt "ABC"   // Failure "Expecting '9'. Got 'A'"
+
+let digit = anyOf ['0'..'9']
+
+let whitespaceChar = anyOf [' '; '\t'; '\n']
+let whitespace = many1 whitespaceChar
+let parseAB_CD = parseString "AB" .>> whitespace .>>. parseString "CD"
+
+/// Keep only the result of the middle parser
+let between p1 p2 p3 =
+    p1 >>. p2 .>> p3
+
+
+tryParser parseAB_CD "AB \t\nCD"   // Success (("AB", "CD"), "")
