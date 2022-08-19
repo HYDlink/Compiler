@@ -1,4 +1,5 @@
 ﻿open System
+open Microsoft.FSharp.Collections
 
 printfn "Hello world"
 let myInt = 5
@@ -145,9 +146,14 @@ let printResult (result: ParseResult<'a>) =
     match result with
     | Success (a, _) -> $"%A{a}"
     | Failure (label, pos, error) ->
-        let msg = $"Line:{pos.line}, Col:{pos.column} Error Parsing {label}"
+        let msg =
+            $"Line:{pos.line}, Col:{pos.column} Error Parsing {label}"
+
         let line = pos.currentLine
-        let hint = sprintf "%*s^%s" pos.column "" error
+
+        let hint =
+            sprintf "%*s^%s" pos.column "" error
+
         $"{msg}\n{line}\n{hint}"
 
 // how to put label into Failure result
@@ -251,7 +257,8 @@ let mapP (fn: ('a -> 'b)) (parser: Parser<'a>) : Parser<'b> = parser >>= (fun a 
 let (<!>) = mapP
 let (|>>) x f = mapP f x
 
-let parseDigit = anyOf [ '0' .. '9' ] <?> "Digit"
+let parseDigit =
+    anyOf [ '0' .. '9' ] <?> "Digit"
 
 let parseThreeDigits =
     let transformTuple ((c1, c2), c3) = System.String [| c1; c2; c3 |]
@@ -319,6 +326,25 @@ let parseOneOrMore parser input =
         Success(firstValue :: tailResult, result)
     | Failure (a, b, c) -> Failure(a, b, c)
 
+let rec parseCountFn (count:int) (parser: Parser<'a>) (input: InputState) =
+    if count <= 0 then
+        Success ([], input)
+    else
+        let thisResult = runInputState parser input
+        match thisResult with
+        | Success (thisValue, nextInput) ->
+            let laterResult = parseCountFn (count - 1) parser nextInput
+            match laterResult with
+            | Success (laterValue, laterInput) ->
+                Success (thisValue :: laterValue, laterInput)
+            | Failure (a, b, c) -> Failure (a, b, c)
+        | Failure (a, b, c) -> Failure (a, b, c)
+
+let parseCount count parser =
+    parseCountFn count parser
+    |> Parser.fromParserFn
+    <?> $"{count} times {parser.label}"
+
 let many parser =
     let innerFn input =
         let result = parseZeroOrMore parser input
@@ -340,24 +366,28 @@ let porab = anyOf [ 'a'; 'b' ]
 let lowerCase = anyOf [ 'a' .. 'z' ]
 
 let tryParser parser input =
-    run parser input |> printResult |> Console.WriteLine
+    run parser input
+    |> printResult
+    |> Console.WriteLine
 
-tryParser pab "aba"
-tryParser porab "aba"
-tryParser porab "bba"
-
-tryParser parseThreeDigits "123A"
+let TryParseBasicCombinator () =
+    tryParser pa "aba"
+    tryParser pab "aba"
+    tryParser porab "aba"
+    tryParser porab "bba"
+    tryParser parseThreeDigits "123A"
 
 let parseIf = parseString "if"
 
-tryParser parseIf "ifthen"
+// tryParser parseIf "ifthen"
 
 let manyLower = many lowerCase
 let many1Lower = many1 lowerCase
 
-tryParser manyLower "abaB"
-tryParser many1Lower "abaB"
-tryParser many1Lower "|abaB"
+let TryParseMany () =
+    tryParser manyLower "abaB"
+    tryParser many1Lower "abaB"
+    tryParser many1Lower "|abaB"
 
 // try p, if p failed, returns None, otherwise return Some wrapped Parser result
 let opt p =
@@ -385,21 +415,26 @@ let parseInt =
         | None -> i
 
     let parseSign = parseChar '-' |> opt
-    parseSign .>>. (many1 parseDigit) <?> "int" |>> resultToInt
 
-tryParser parseInt "1ABC" // Success (1, "ABC")
-tryParser parseInt "12BC" // Success (12, "BC")
-tryParser parseInt "123C" // Success (123, "C")
-tryParser parseInt "1234" // Success (1234, "")
-tryParser parseInt "-1234" // Success (-1234, "")
-tryParser parseInt "ABC" // Failure "Expecting '9'. Got 'A'"
+    parseSign .>>. (many1 parseDigit) <?> "int"
+    |>> resultToInt
+
+let tryParseInt () =
+    tryParser parseInt "1ABC" // Success (1, "ABC")
+    tryParser parseInt "12BC" // Success (12, "BC")
+    tryParser parseInt "123C" // Success (123, "C")
+    tryParser parseInt "1234" // Success (1234, "")
+    tryParser parseInt "-1234" // Success (-1234, "")
+    tryParser parseInt "ABC" // Failure "Expecting '9'. Got 'A'"
 
 let digit = anyOf [ '0' .. '9' ]
 
 let whitespaceChar =
-    anyOf [ ' '; '\t'; '\n' ]
+    anyOf [ ' '; '\t'; '\n'; '\r' ]
 
 let whitespace = many1 whitespaceChar
+
+let anyWhitespace = many whitespaceChar
 
 let parseAB_CD =
     parseString "AB" .>> whitespace
@@ -411,3 +446,202 @@ let between p1 p2 p3 = p1 >>. p2 .>> p3
 
 tryParser parseAB_CD "AB \t\nCD" // Success (("AB", "CD"), "")
 
+/// start Json Parser
+
+type JValue =
+    | JString of string
+    | JNumber of double
+    | JBool of bool
+    | JNull
+    | JObject of Map<string, JValue>
+    | JArray of JValue list
+
+/// runs parser p, but return x rather than result
+let (>>%) p x = p |>> (fun _ -> x)
+
+let pJNull =
+    parseString "null" >>% JNull <?> "null"
+
+let pJBool =
+    (parseString "true" >>% JBool true)
+    .<>. (parseString "false" >>% JBool false)
+    <?> "JBool"
+
+let pJNumber =
+    let pMinus = parseChar '-' <?> "Minus"
+    let pZero = parseChar '0' <?> "Zero"
+
+    let pHeadDigit =
+        anyOf [ '1' .. '9' ] <?> "HeadDigit"
+
+    let pDot = parseChar '.' <?> "Dot"
+
+    let pInteger =
+        (opt pMinus)
+        .>>. (pZero .<>. pHeadDigit)
+        .>>. (many parseDigit)
+        <?> "Integer"
+
+    let decimal (point, chList) =
+        point :: chList
+        |> List.toArray
+        |> System.String
+        |> double
+
+    let pDecimal =
+        pDot .>>. (many parseDigit) <?> "Decimal"
+        |>> decimal
+
+    let scienceToInt (sign: char option, charList) =
+        let i =
+            charList |> List.toArray |> String |> double
+
+        match sign with
+        | Some _ -> -i
+        | None -> i
+
+    let pScience =
+        let pSign =
+            opt (anyOf [ '+'; '-' ]) <?> "Sign"
+
+        anyOf [ 'e'; 'E' ] >>. pSign
+        .>>. (many parseDigit)
+        <?> "Science"
+        |>> scienceToInt
+
+    let toFloat (((integer: int option), (dec: double option)), (sci: double option)) =
+        let intD =
+            match integer with
+            | Some i -> i |> double
+            | None -> 0.
+
+        let body =
+            match dec with
+            | Some d ->
+                match intD with
+                | i when i < 0 -> intD - d
+                | _ -> intD + d
+            | None -> intD
+        
+        let result =
+            match sci with
+            | Some e -> body * (10. ** e)
+            | None -> body
+
+        JNumber result
+
+    opt parseInt .>>. opt pDecimal .>>. opt pScience
+    <?> "JNumber"
+    |>> toFloat
+
+let pJNumber_ = pJNumber .>> whitespaceChar
+
+let pUnicodeChar =  
+    let pHex = anyOf (['0'..'9'] @ ['a'..'f'] @ ['A'..'F'])
+    
+    let digitStrToUChar digitStr =
+        let str = digitStr |> List.toArray |> String
+        Int32.Parse(str,Globalization.NumberStyles.HexNumber)
+        |> char
+
+    parseString "\\u" >>. (parseCount 4 pHex) |>> digitStrToUChar <?> "UnicodeChar"
+
+let pEscaped =
+    let escapeMap : (char*char) list = [
+        ('\"', '\"')
+        ('b', '\b')
+        ('f', '\f')
+        ('n', '\n')
+        ('r', '\r')
+        ('t', '\t')
+        // ('/', '/')
+    ]
+    let pMapEscape =
+         let kvToEscape (k:char, v:char) =
+             satisfy (fun ch -> ch = k) (v.ToString()) >>% v
+         escapeMap |> List.map kvToEscape |> choice
+    parseChar '\\' >>. pMapEscape <?> "EscapedChar"
+
+let pUnescaped = satisfy (fun ch -> ch <> '\\' && ch <> '"') "Unescaped char"
+
+let pJString =
+    let pQuote = parseChar '"'
+    let pInnerString = many (choice [pEscaped; pUnicodeChar; pUnescaped])
+    let charListToString charList =
+        charList |> List.toArray |> String |> JString
+    pQuote >>. pInnerString .>> pQuote <?> "JString" |>> charListToString
+
+let rec pJArray =
+    let pJValue = choice [pJNull; pJBool; pJNumber; pJString ] //pJArray; pJObject]
+    let pLeft = parseChar '[' .>> anyWhitespace
+    let pRight = anyWhitespace >>. parseChar ']'
+    let pSep = parseChar ',' .>> anyWhitespace
+    
+    let toJArray (input: (JValue * (JValue list)) option) =
+        match input with
+        | None -> JArray []
+        | Some (head, tail) -> head :: tail |> JArray
+        
+    // ignore first object sep, but remaining object must head with sep
+    let pArray = (opt (pJValue .>>. (many (pSep >>. pJValue))))
+    pLeft >>. pArray .>> pRight <?> "JArray" |>> toJArray
+and pJObject =
+    let pJValue = choice [pJNull; pJBool; pJNumber; pJString ]// pJArray; pJObject]
+    let pLeft = parseChar '{' .>> anyWhitespace
+    let pRight = anyWhitespace >>. parseChar '}'
+    let pSep = parseChar ',' .>> anyWhitespace
+    let pColon = anyWhitespace >>. parseChar ':' .>> anyWhitespace
+    
+    let UnwrapJString js =
+        match js with
+        | JString str -> str
+        | _ -> ""
+    let pItem = pJString |>> UnwrapJString .>> pColon .>>. pJValue
+    
+    let toJObject (input: ((string * JValue) * ((string *JValue) list)) option) =
+        match input with
+        | None -> Map [] |> JObject
+        | Some (head, tail) -> head :: tail |> Map |> JObject
+        
+    let pArray = (opt (pItem .>>. (many (pSep >>. pItem))))
+    pLeft >>. pArray .>> pRight
+    <?> "JObject"
+    |>> toJObject
+
+let TryParseJString() =
+    tryParser pUnicodeChar "\\u263A"
+    tryParser pJString "\"\🌀\""
+    tryParser pJString "\"23423\""
+    tryParser pJString "\"\\u2345\""
+    tryParser pJString "\"haha\""
+    tryParser pJString "\"why\\tnot\""
+
+let TryParseJson () =
+    tryParser pJBool "true"
+    tryParser pJBool "false"
+    tryParser pJBool "faa"
+    tryParser pJNull "null"
+    tryParser pJNumber "1"
+    tryParser pJNumber "1342"
+    tryParser pJNumber "0342"
+    tryParser pJNumber "-3.42e-3"
+    // too large
+    // tryParser pJNumber "-237462374673276894279832749832423479823246327846"
+    tryParser pJNumber ".0342"
+    tryParser pJNumber ".0342e4"
+    tryParser pJArray "[ 23, 24,null, true, false]"
+    tryParser pJObject "{\"haha\": 23, \"NoNo\": null }"
+
+let TryParseCount () =
+    let parse4Digit = parseCount 4 parseDigit
+    tryParser parse4Digit "1234"
+    tryParser parse4Digit "0236"
+    tryParser parse4Digit "02"
+    tryParser parse4Digit ""
+    tryParser parse4Digit "123465"
+    tryParser parse4Digit "12365"
+
+// TryParseCount()
+// TryParseJson()
+TryParseJString()
+// printfn "☺"
