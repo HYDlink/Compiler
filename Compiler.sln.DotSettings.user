@@ -4,6 +4,7 @@
     &lt;TestId&gt;NUnit3x::DE82A71F-B084-4013-B648-14254FD70922::net6.0::TestProject.Tests.TestSimpleLua&lt;/TestId&gt;&#xD;
     &lt;TestId&gt;NUnit3x::DE82A71F-B084-4013-B648-14254FD70922::net6.0::TestProject.Tests.TestSimpleLuaLexical&lt;/TestId&gt;&#xD;
     &lt;TestId&gt;NUnit3x::DE82A71F-B084-4013-B648-14254FD70922::net6.0::TestProject.TestContextFreeGrammar.Generate&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;NUnit3x::DE82A71F-B084-4013-B648-14254FD70922::net6.0::TestProject.TestLuaParserOnSly.TestSly&lt;/TestId&gt;&#xD;
   &lt;/TestAncestor&gt;&#xD;
 &lt;/SessionState&gt;</s:String>
 	<s:String x:Key="/Default/Housekeeping/UnitTestingMru/UnitTestRunner/SpawnedProcessesKnownList/=cmd_002Eexe/@EntryIndexedValue">DoNothing</s:String>

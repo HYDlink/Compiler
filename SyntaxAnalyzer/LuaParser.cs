@@ -3,6 +3,7 @@ using SyntaxAnalyzer.Exceptions;
 
 namespace SyntaxAnalyzer;
 
+/// 这是 C#
 public class LuaParser : ParserBase
 {
     public List<Token> Tokens { get; set; } = new();
@@ -32,8 +33,16 @@ public class LuaParser : ParserBase
              ; ++CurIndex) ;
     }
 
+    public Token? RegexMatch()
+    {
+        // 优先级测试，Keyword，Operator，comment，Identifier 组合
+        // regex generate
+        return null;
+    }
+
     public Token? MatchToken()
     {
+        var nono = '\0';
         var to_restore = CurIndex;
         if (CurIndex >= Input.Length)
             return null;

@@ -11,6 +11,7 @@
     <Compile Include="ParserCombinator.fs" />
     <Compile Include="ParserUtilities.fs" />
     <Compile Include="JsonParser.fs" />
+    <Compile Include="LuaParser.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

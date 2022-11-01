@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using FluentAssertions;
 using SyntaxAnalyzer;
 using SyntaxAnalyzer.Exceptions;
@@ -39,5 +40,16 @@ end";
         var lua_parser = new LuaParser(str);
         Action action = () => lua_parser.Parse();
         action.Should().Throw<LexicalException>("64a is not digit or identifier");
+    }
+
+    [Test]
+    public void TestRegexGroup()
+    {
+        var regex = new Regex(@"(?<id>[_a-zA-Z]\w*)|(?<k>if)");
+        var match_if = regex.Match("if");
+        Console.WriteLine(match_if.Groups["k"]);
+        Console.WriteLine(regex.Match("_haha"));
+        Console.WriteLine(regex.Match("4l"));
+        Console.WriteLine(regex.Match("l4"));
     }
 }

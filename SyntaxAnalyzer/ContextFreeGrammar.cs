@@ -35,6 +35,7 @@ public record CfgNode(string Value, CfgNodeType Type)
 
 public class CfgProduction : List<CfgNode>
 {
+    public string Name { get; set; }
     public override string ToString()
         => string.Join(' ', this);
 }

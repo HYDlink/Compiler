@@ -18,6 +18,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\LuaAnalyzer\LuaAnalyzer.csproj" />
       <ProjectReference Include="..\SyntaxAnalyzer\SyntaxAnalyzer.csproj" />
     </ItemGroup>
 
