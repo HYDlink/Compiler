@@ -1,3 +1,5 @@
+module TinyML.LambdaMachine
+
 type Expr = 
     | Cst of int
     | Add of Expr * Expr
@@ -6,7 +8,7 @@ type Expr =
     // { Name: string; Value: Expr; Environment: Expr}
     | Let of string * Expr * Expr 
     | Fn of string list * Expr // Parameters, Function body
-    | Apply of Expr * (string list) // Function, Arguments
+    | Apply of Expr * (Expr list) // Function, Arguments
 
 type Inst = Const of int | Addition | Multiply | Variable of int | Swap | Pop
 
@@ -29,7 +31,7 @@ module VEnv =
     
     /// closure.env apply to (args at venv), 
     /// return captured all env (include closure new env @ venv)
-    let apply closure (args: string list) venv =
+    let applyArgs closure (args: string list) venv =
         let { Env = cenv; Params = params; Body = body } = closure
         let getArg i paramName =
             let value = get args[i] venv
@@ -37,6 +39,7 @@ module VEnv =
         let argValues = params |> List.mapi getArg
         // find params in venv, combine with cenv, merge body
         argValues @ cenv @ venv
+    
     
     let value = function 
     | VInt i -> i 
@@ -51,9 +54,13 @@ let vadd v1 v2 =
 
 let vmul v1 v2 =
     (v1 |> VEnv.value)
-    +
+    *
     (v2 |> VEnv.value)
     |> VInt
+
+let log msg a =
+    printfn $"{msg} {a}"
+    a
 
 /// Func 需要捕获环境，将捕获了的变量，和自身的值返回出来
 let rec eval (expr: Expr) (env: VEnv) : Value = 
@@ -63,7 +70,7 @@ let rec eval (expr: Expr) (env: VEnv) : Value =
         vadd (eval l env) (eval r env)
     | Mult (l, r ) ->
         vmul (eval l env) (eval r env)
-    | Var(name) -> Env.get name env
+    | Var(name) -> VEnv.get name env
     | Let(name, valueExpr, scope) 
         -> 
         let value = (eval valueExpr env)
@@ -72,9 +79,17 @@ let rec eval (expr: Expr) (env: VEnv) : Value =
     | Fn (params, body) -> 
         printfn $"Func Env: {env}"
         VClosure { Env = env; Params = params; Body = body }
-    | Apply(func, args) -> 
+    | Apply(func, args) ->
+        let applyExprs closure (args: Expr list) venv =
+            let { Env = cenv; Params = params; Body = body } = closure
+            let getArg i paramName =
+                let value = eval args[i] venv
+                (paramName, value)
+            let argValues = params |> List.mapi getArg
+            // find params in venv, combine with cenv, merge body
+            argValues @ cenv @ venv
         let (VClosure closure) = eval func env
-        let newEnv = VEnv.apply closure args env
+        let newEnv = applyExprs closure args env
         printfn $"Apply NewEnv: {newEnv}"
         eval closure.Body newEnv
 
@@ -194,10 +209,13 @@ let ef1 =
             Cst(2),
             Let("y",
                 Cst(3),
-                Apply((Var "f"), ["x"; "y"])
+                Apply((Var "f"), [(Var "x"); (Var "y")])
             )
         )
     )
+
+let ef2 = Let  ("add2", Fn (["x"; "y"], Add (Var "x", Mult (Var "y", Cst 2))),
+   Let ("z", Cst 3, Apply (Var "add2", [Cst 1; Var "z"])))
 
 let test expr = 
     eval expr [] |> printfn "%A"
@@ -209,4 +227,5 @@ let test expr =
 let testFunc expr =
     eval expr [] |> printfn "%A"
 
-testFunc ef1
+let tester() =
+    testFunc ef1

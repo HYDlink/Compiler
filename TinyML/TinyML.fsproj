@@ -6,9 +6,9 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <None Include="StackMachine.fsx" />
+        <Compile Include="StackMachine.fs" />
         <Compile Include="NamelessStateMachine.fs" />
-        <None Include="LambdaMachine.fsx" />
+        <Compile Include="LambdaMachine.fs" />
         <Compile Include="Parser.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>

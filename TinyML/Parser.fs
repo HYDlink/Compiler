@@ -1,7 +1,7 @@
 module TinyML.Parser
 
 open FParsec.CharParsers
-open TinyML.NamelessStateMachine
+open TinyML.LambdaMachine
 open FParsec
 
 let pConst: Parser<Expr, unit> =
@@ -9,6 +9,8 @@ let pConst: Parser<Expr, unit> =
     <?> "pConst"
 
 let pExpr, pExprRef =
+    createParserForwardedToRef<Expr, unit> ()
+let pEvaluate, pEvaluateRef =
     createParserForwardedToRef<Expr, unit> ()
 let pCalc, pCalcRef =
     createParserForwardedToRef<Expr, unit> ()
@@ -28,6 +30,11 @@ let pId = identifier (IdentifierOptions())
 let pVar: Parser<Expr, unit> =
     pId |>> Var
     <?> "Variable"
+
+let pApply =
+    (pId .>>? spaces1) .>>.? (many1 (withSpaces pEvaluate))
+    |>> (fun (id, args) -> Apply((Var id), args))
+    <?> "Apply"
 
 let pAdd =
     withSpaces pPriorityAdd .>>? (withSpaces (pchar '+')) .>>. pPriorityAdd |>> Add
@@ -63,16 +70,32 @@ pCalcRef.Value <-
 
 let pLet =
     withSpaces (pstring "let")
-    >>. (withSpaces pId)
+    // >>. (withSpaces pId)
+    >>. (many1 (withSpaces pId))
+    <?> "Ids"
     
     .>> withSpaces (pchar '=')
-    .>>. pCalc
+    .>>. pEvaluate
+    <?> "Definition"
     
     .>> (withSpaces newline)
     .>>. pExpr
+    <?> "Later environment"
     
-    |>> (fun ((a, b), c) -> Let (a, b, c))
+    |>> (fun ((ids, definition), later) ->
+        match ids with
+        | [id] -> Let (id, definition, later)
+        | id :: params -> Let (id, Fn(params, definition), later)
+        | [] -> failwithf "should parse more than one id")
     <?> "Let"
+
+pEvaluateRef.Value <-
+    choice [ pAdd
+             pMultiply
+             pConst
+             pBrace
+             pVar ]
+    <?> "Evaluation"
 
 pExprRef.Value <-
     choice [ pLet
@@ -80,12 +103,16 @@ pExprRef.Value <-
              pMultiply
              pConst
              pBrace
+             pApply
              pVar ]
     <?> "Expression"
 
 let testExpr parser expr =
     match run parser expr with
-    | Success(a, unit, position) -> test a
+    | Success(a, unit, position) ->
+        printfn $"Expression: %A{a}"
+        testFunc a
+        printfn ""
     | Failure(s, parserError, unit) ->
         printfn $"%A{(s, parserError, unit)}"
 
@@ -101,3 +128,7 @@ x + y"
     testExpr pLet "let x = 3
 let y = x
 x + y"
+
+    testExpr pExpr "let add2 x y = x + y * 2
+let z = 3
+add2 1 z"
