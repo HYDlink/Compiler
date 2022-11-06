@@ -1,3 +1,5 @@
 namespace LuaAnalyzer.Syntax;
 
-public record Statement(string Id, Expression Expression) : AST;
+public record Statement() : AST;
+
+public record AssignStatement(string Id, Expression Expression) : Statement;

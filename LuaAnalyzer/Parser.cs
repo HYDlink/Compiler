@@ -24,9 +24,9 @@ public static class Parser
         return parser;
     }
 
-    public static Block Parse(string cirnoText)
+    public static Block Parse(string script)
     {
-        var r = GetParser().Parse(cirnoText);
+        var r = GetParser().Parse(script);
         if (r.IsError)
         {
             var msg = "Parser Error";

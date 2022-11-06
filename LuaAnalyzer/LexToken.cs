@@ -41,6 +41,9 @@ public enum LexToken
 
     [Keyword("print")]
     PRINT = 12,
+    
+    [Keyword("end")]
+    END = 13,
 
     #endregion
 
