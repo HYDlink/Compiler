@@ -26,13 +26,12 @@ let withSpaces p = p .>> spaces
     
 let pId = identifier (IdentifierOptions())
 
-
 let pVar: Parser<Expr, unit> =
     pId |>> Var
     <?> "Variable"
 
 let pApply =
-    (pId .>>? spaces1) .>>.? (many1 (withSpaces pEvaluate))
+    (pId) .>>.? (many1 ((anyOf " \t") >>? pEvaluate))
     |>> (fun (id, args) -> Apply((Var id), args))
     <?> "Apply"
 
@@ -68,19 +67,23 @@ pCalcRef.Value <-
              pVar ]
     <?> "Calculate"
 
+let pLog msg parser =
+    parser |>> (fun a -> log msg a)
+
 let pLet =
     withSpaces (pstring "let")
     // >>. (withSpaces pId)
-    >>. (many1 (withSpaces pId))
-    <?> "Ids"
+    >>. ((many1 (withSpaces pId))
+    <?> "Ids")
     
-    .>> withSpaces (pchar '=')
-    .>>. pEvaluate
-    <?> "Definition"
+    .>>. (withSpaces (pchar '=')
+    >>. pEvaluate
+    |> pLog "Evaluate"
+    <?> "Definition")
     
-    .>> (withSpaces newline)
-    .>>. pExpr
-    <?> "Later environment"
+    .>>. ((withSpaces newline)
+    >>. pExpr
+    <?> "Later environment")
     
     |>> (fun ((ids, definition), later) ->
         match ids with
@@ -94,6 +97,7 @@ pEvaluateRef.Value <-
              pMultiply
              pConst
              pBrace
+             pApply
              pVar ]
     <?> "Evaluation"
 
@@ -114,7 +118,7 @@ let testExpr parser expr =
         testFunc a
         printfn ""
     | Failure(s, parserError, unit) ->
-        printfn $"%A{(s, parserError, unit)}"
+        printfn $"%A{s}"
 
 let pTest () =
     testExpr pCalc "2 + 3"
@@ -132,3 +136,12 @@ x + y"
     testExpr pExpr "let add2 x y = x + y * 2
 let z = 3
 add2 1 z"
+
+    testExpr pExpr "let add2 x y = x + y * 2
+let z = 3
+let add2with3 = add2 z
+add2with3 4"
+
+let TestSeq() =
+    printfn $"%A{({ 0 .. 1 })}"
+    printfn $"%A{({ 0 .. 0 })}"

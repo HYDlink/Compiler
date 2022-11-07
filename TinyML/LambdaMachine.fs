@@ -26,8 +26,10 @@ and Closure = { Env: VEnv; Params: string list; Body: Expr}
 module VEnv = 
     let get name (venv: VEnv) =
         venv |>
-        List.find (fun e -> fst e |> (=) name)
-        |> snd
+        List.tryFind (fun e -> fst e |> (=) name)
+        |> function
+            | Some a -> snd a
+            | None -> failwithf $"variable not found in Venv: %A{name}"
     
     /// closure.env apply to (args at venv), 
     /// return captured all env (include closure new env @ venv)
@@ -80,18 +82,30 @@ let rec eval (expr: Expr) (env: VEnv) : Value =
         printfn $"Func Env: {env}"
         VClosure { Env = env; Params = params; Body = body }
     | Apply(func, args) ->
+        /// if args.Count = param.Count, apply function directly
+        /// else partial apply
+        ///     add arguments to function param env
         let applyExprs closure (args: Expr list) venv =
-            let { Env = cenv; Params = params; Body = body } = closure
-            let getArg i paramName =
+            let { Env = cenv; Params = paras; Body = body } = closure
+            assert (args.Length <= paras.Length)
+            
+            let getArg i =
                 let value = eval args[i] venv
-                (paramName, value)
-            let argValues = params |> List.mapi getArg
+                (paras[i], value)
+            printfn $"Args count: {args.Length}"
+            let argValues = { 0 .. args.Length - 1 } |> Seq.map getArg |> Seq.toList
             // find params in venv, combine with cenv, merge body
-            argValues @ cenv @ venv
+            match args.Length = paras.Length with
+            | true ->
+                let newEnv = argValues @ cenv @ venv
+                printfn $"Apply NewEnv: {newEnv}"
+                eval closure.Body newEnv
+            // partial apply, currying
+            | false -> VClosure { closure with
+                                  Env = argValues @ cenv
+                                  Params = List.skip args.Length paras }
         let (VClosure closure) = eval func env
-        let newEnv = applyExprs closure args env
-        printfn $"Apply NewEnv: {newEnv}"
-        eval closure.Body newEnv
+        applyExprs closure args env
 
 /// StackIndex: store stack index (from stack bottom to top) at let provider
 /// curIndex ... 2; 1;   ...
