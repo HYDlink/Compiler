@@ -22,24 +22,33 @@ let pPriorityBrace, pPriorityBraceRef =
     createParserForwardedToRef<Expr, unit> ()
 // priorityRef
 
-let withSpaces p = p .>> spaces
+let withSpaces p = p .>>? spaces
     
 let pId = identifier (IdentifierOptions())
+
+/// fun pattern* -> body
+/// Fn(p2, Fn(p1, body))
+let pFun =
+    withSpaces (pstring "fun") >>. (withSpaces (pstring "->"))
+    >>. many1 (withSpaces pId) .>>. pExpr
+    |>> (fun (ids, body) -> Expr.fnParams body ids)
 
 let pVar: Parser<Expr, unit> =
     pId |>> Var
     <?> "Variable"
 
 let pApply =
-    (pId) .>>.? (many1 ((anyOf " \t") >>? pEvaluate))
-    |>> (fun (id, args) -> Apply((Var id), args))
+    (pVar <|> pFun) .>>.? (many1 ((anyOf " \t") >>? pEvaluate))
+    // args -> (Apply (Apply value, arg1), arg2)
+    |>> (fun (value, args) -> List.fold (fun prev next -> Apply(prev, next)) value args)
     <?> "Apply"
 
-let pAdd =
-    withSpaces pPriorityAdd .>>? (withSpaces (pchar '+')) .>>. pPriorityAdd |>> Add
+let pOperator = (many1 (anyOf "!$%&*+-./<>?@^|")) |>> System.String.Concat
 
-let pMultiply =
-    withSpaces pPriorityMultiply .>>? (withSpaces (pchar '*')) .>>. pPriorityMultiply |>> Mult
+let pOperatorFun =
+    withSpaces pPriorityMultiply .>>.? (withSpaces pOperator) .>>. pCalc
+    |>> (fun ((left, op), right) -> Expr.applyArgs (Var $"({op})") [left; right] )
+
 // and pPriority2 =
 //     pConst <|> pBrace <|> pMultiply
 // and pPriority0 =
@@ -49,7 +58,7 @@ let pBrace =
     withSpaces (pchar '(') >>. (withSpaces pCalc) .>> pchar ')'
 
 pPriorityAddRef.Value <-
-    choice [ pMultiply
+    choice [ pOperatorFun
              pConst
              pBrace
              pVar ]
@@ -60,8 +69,7 @@ pPriorityMultiplyRef.Value <-
              pVar ]
     <?> "Priority Multiply"
 pCalcRef.Value <-
-    choice [ pAdd
-             pMultiply
+    choice [ pOperatorFun
              pConst
              pBrace
              pVar ]
@@ -70,10 +78,12 @@ pCalcRef.Value <-
 let pLog msg parser =
     parser |>> (fun a -> log msg a)
 
+let pOpDefName = pchar '(' .>>. pOperator .>>. pchar ')' |>> (fun ((l, op), r) -> $"({op})")
+
 let pLet =
     withSpaces (pstring "let")
     // >>. (withSpaces pId)
-    >>. ((many1 (withSpaces pId))
+    >>. ((withSpaces (pId <|> pOpDefName)) .>>. (many (withSpaces pId))
     <?> "Ids")
     
     .>>. (withSpaces (pchar '=')
@@ -85,16 +95,14 @@ let pLet =
     >>. pExpr
     <?> "Later environment")
     
-    |>> (fun ((ids, definition), later) ->
-        match ids with
-        | [id] -> Let (id, definition, later)
-        | id :: params -> Let (id, Fn(params, definition), later)
-        | [] -> failwithf "should parse more than one id")
+    |>> (fun (((name, params), definition), later) ->
+        match params with
+        | [] -> Let (name, definition, later)
+        | _ -> Let (name, (Expr.fnParams definition params), later))
     <?> "Let"
 
 pEvaluateRef.Value <-
-    choice [ pAdd
-             pMultiply
+    choice [ pOperatorFun
              pConst
              pBrace
              pApply
@@ -103,8 +111,7 @@ pEvaluateRef.Value <-
 
 pExprRef.Value <-
     choice [ pLet
-             pAdd
-             pMultiply
+             pOperatorFun
              pConst
              pBrace
              pApply
@@ -140,7 +147,13 @@ add2 1 z"
     testExpr pExpr "let add2 x y = x + y * 2
 let z = 3
 let add2with3 = add2 z
-add2with3 4"
+add2with3 4
+"
+    testExpr pExpr "let (@) x y = x + y * 2
+3 @ 4
+"
+
+    
 
 let TestSeq() =
     printfn $"%A{({ 0 .. 1 })}"

@@ -1,5 +1,7 @@
 module TinyML.LambdaMachine
 
+open TinyML.StateMachine
+
 type Expr = 
     | Cst of int
     | Add of Expr * Expr
@@ -7,8 +9,18 @@ type Expr =
     | Var of string
     // { Name: string; Value: Expr; Environment: Expr}
     | Let of string * Expr * Expr 
-    | Fn of string list * Expr // Parameters, Function body
-    | Apply of Expr * (Expr list) // Function, Arguments
+    | Fn of string * Expr // Parameters, Function body
+    | Apply of Expr * (Expr) // Function, Arguments
+    | BuiltInBiOp of (int -> int -> int)
+
+module Expr =
+    /// 
+    let fnParams (body: Expr) (ps: string list) =
+        List.fold (fun prevExpr nextParam -> Fn(nextParam, prevExpr)) body ps
+    
+    let applyArgs (expr: Expr) args =
+        (expr, args) ||>
+        List.fold (fun prevExpr nextArg -> Apply(prevExpr, nextArg)) 
 
 type Inst = Const of int | Addition | Multiply | Variable of int | Swap | Pop
 
@@ -21,8 +33,13 @@ module Env =
 
 type Value = VInt of int | VClosure of Closure
 and VEnv = (string * Value) list
-and Closure = { Env: VEnv; Params: string list; Body: Expr}
+and Closure = { Env: VEnv; Param: string; Body: Expr}
 
+
+let log msg a =
+    printfn $"{msg} {a}"
+    a
+    
 module VEnv = 
     let get name (venv: VEnv) =
         venv |>
@@ -31,81 +48,65 @@ module VEnv =
             | Some a -> snd a
             | None -> failwithf $"variable not found in Venv: %A{name}"
     
-    /// closure.env apply to (args at venv), 
-    /// return captured all env (include closure new env @ venv)
-    let applyArgs closure (args: string list) venv =
-        let { Env = cenv; Params = params; Body = body } = closure
-        let getArg i paramName =
-            let value = get args[i] venv
-            (paramName, value)
-        let argValues = params |> List.mapi getArg
-        // find params in venv, combine with cenv, merge body
-        argValues @ cenv @ venv
-    
-    
     let value = function 
     | VInt i -> i 
     | _ -> failwith "not int"
 
+    let vadd v1 v2 =
+        (v1 |> value)
+        +
+        (v2 |> value)
+        |> VInt
+    
+    let vmul v1 v2 =
+        (v1 |> value)
+        *
+        (v2 |> value)
+        |> VInt
 
-let vadd v1 v2 =
-    (v1 |> VEnv.value)
-    +
-    (v2 |> VEnv.value)
-    |> VInt
+    let createBiOpClosure binOp =
+        Fn ("_l", Fn ("_r", (BuiltInBiOp binOp)))
+    
+    let evaluateBiOp biOp env =
+        let l = get "_l" env
+        let r = get "_r" env
+        biOp (l |> value) (r |> value)
+        |> VInt
+    
+    let buildInEnv =
+        [
+            ("(+)", createBiOpClosure (fun l r -> l + r))
+            ("(*)", createBiOpClosure (fun l r -> l * r))
+        ]
 
-let vmul v1 v2 =
-    (v1 |> VEnv.value)
-    *
-    (v2 |> VEnv.value)
-    |> VInt
-
-let log msg a =
-    printfn $"{msg} {a}"
-    a
-
-/// Func 需要捕获环境，将捕获了的变量，和自身的值返回出来
-let rec eval (expr: Expr) (env: VEnv) : Value = 
-    match expr with
-    | Cst i -> VInt i
-    | Add (l, r) -> 
-        vadd (eval l env) (eval r env)
-    | Mult (l, r ) ->
-        vmul (eval l env) (eval r env)
-    | Var(name) -> VEnv.get name env
-    | Let(name, valueExpr, scope) 
-        -> 
-        let value = (eval valueExpr env)
-        let newEnv = (name, value) :: env
-        (eval scope newEnv)
-    | Fn (params, body) -> 
-        printfn $"Func Env: {env}"
-        VClosure { Env = env; Params = params; Body = body }
-    | Apply(func, args) ->
-        /// if args.Count = param.Count, apply function directly
-        /// else partial apply
-        ///     add arguments to function param env
-        let applyExprs closure (args: Expr list) venv =
-            let { Env = cenv; Params = paras; Body = body } = closure
-            assert (args.Length <= paras.Length)
-            
-            let getArg i =
-                let value = eval args[i] venv
-                (paras[i], value)
-            printfn $"Args count: {args.Length}"
-            let argValues = { 0 .. args.Length - 1 } |> Seq.map getArg |> Seq.toList
-            // find params in venv, combine with cenv, merge body
-            match args.Length = paras.Length with
-            | true ->
-                let newEnv = argValues @ cenv @ venv
-                printfn $"Apply NewEnv: {newEnv}"
-                eval closure.Body newEnv
-            // partial apply, currying
-            | false -> VClosure { closure with
-                                  Env = argValues @ cenv
-                                  Params = List.skip args.Length paras }
-        let (VClosure closure) = eval func env
-        applyExprs closure args env
+let evaluate (expr: Expr) =
+    /// Func 需要捕获环境，将捕获了的变量，和自身的值返回出来
+    let rec eval (expr: Expr) (env: VEnv) : Value = 
+        match expr with
+        | Cst i -> VInt i
+        | BuiltInBiOp func ->
+            // retrieve left value, and right value from env
+            VEnv.evaluateBiOp func env
+        | Var(name) ->
+            VEnv.get name env
+        | Let(name, valueExpr, scope) 
+            -> 
+            let value = (eval valueExpr env)
+            let newEnv = (name, value) :: env
+            (eval scope newEnv)
+        | Fn (param, body) -> 
+            printfn $"Func Env: {env}"
+            VClosure { Env = env; Param = param; Body = body }
+        | Apply(func, arg) ->
+            match eval func env with
+            | VClosure { Env = venv; Param = param; Body = body }
+                -> let argVal = (eval arg env)
+                   let newEnv = (param, argVal) :: venv
+                   eval body newEnv
+            | _ -> failwith ""
+    
+    let buildInEnv = List.map (fun (a, b) -> (a, eval b [])) VEnv.buildInEnv
+    eval expr buildInEnv
 
 /// StackIndex: store stack index (from stack bottom to top) at let provider
 /// curIndex ... 2; 1;   ...
@@ -214,32 +215,29 @@ let e2 =
 let ef1 =
     Let("f",
         Let("z", Cst(4),
-            Fn(["a"; "b"],
-                Mult(Add((Var "a"), (Var "b")),
-                    (Var "z"))
-                )
+            Expr.fnParams (Mult(Add((Var "a"), (Var "b")), (Var "z"))) ["a"; "b"]
             ),
         Let("x",
             Cst(2),
             Let("y",
                 Cst(3),
-                Apply((Var "f"), [(Var "x"); (Var "y")])
+                Expr.applyArgs (Var "f") [(Var "x"); (Var "y")]
             )
         )
     )
 
-let ef2 = Let  ("add2", Fn (["x"; "y"], Add (Var "x", Mult (Var "y", Cst 2))),
-   Let ("z", Cst 3, Apply (Var "add2", [Cst 1; Var "z"])))
+let ef2 = Let ("add2", (Expr.fnParams (Add (Var "x", Mult (Var "y", Cst 2))) ["x"; "y"]),
+   Let ("z", Cst 3, Expr.applyArgs (Var "add2") [Cst 1; Var "z"]))
 
 let test expr = 
-    eval expr [] |> printfn "%A"
+    evaluate expr |> printfn "%A"
     let i = eval2instDirect expr
     i |> printfn "%A"
     let s = evalStack i []
     s |> printfn "%A"
 
 let testFunc expr =
-    eval expr [] |> printfn "%A"
+    evaluate expr |> printfn "%A"
 
 let tester() =
     testFunc ef1
