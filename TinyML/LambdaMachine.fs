@@ -3,15 +3,15 @@ module TinyML.LambdaMachine
 open TinyML.StateMachine
 
 type Expr = 
-    | Cst of int
-    | Add of Expr * Expr
-    | Mult of Expr * Expr
-    | Var of string
-    // { Name: string; Value: Expr; Environment: Expr}
-    | Let of string * Expr * Expr 
-    | Fn of string * Expr // Parameters, Function body
-    | Apply of Expr * (Expr) // Function, Arguments
+    | Cst of value: int
+    | Add of left: Expr * right: Expr
+    | Mult of left: Expr * right: Expr
+    | Var of name: string
+    | Let of var: string * def: Expr * env: Expr 
+    | Fn of param: string * body: Expr 
+    | Apply of func: Expr * arg: Expr
     | BuiltInBiOp of (int -> int -> int)
+    | If of Cond: Expr * Then: Expr * Else: Expr
 
 module Expr =
     /// 
@@ -23,6 +23,13 @@ module Expr =
         List.fold (fun prevExpr nextArg -> Apply(prevExpr, nextArg)) 
 
 type Inst = Const of int | Addition | Multiply | Variable of int | Swap | Pop
+
+type Primitive = Int | Bool
+type Type =
+    | Prim of Primitive
+    | Func of Param: Type * Ret: Type
+    | Generic of id: string
+
 
 type Env = (string * int) list
 module Env =
@@ -78,6 +85,17 @@ module VEnv =
             ("(+)", createBiOpClosure (fun l r -> l + r))
             ("(*)", createBiOpClosure (fun l r -> l * r))
         ]
+
+let rec listType : Expr -> (Expr * Type) list =
+    function
+    | Cst c -> [Cst c, Prim Int]
+    | Add(left, right)
+    | Mult(left, right) -> [ left, Prim Int; right, Prim Int ]
+                          @ (listType left) @ (listType right)
+    | Var name -> [ Var name, Generic name ]
+    | Let(var, expr, env) -> [ Var var, Generic var ] @ listType expr @ listType env
+    | Fn(param, body) -> [ Var param, Generic param ] @ listType body
+    | Apply(func, expr) -> []
 
 let evaluate (expr: Expr) =
     /// Func 需要捕获环境，将捕获了的变量，和自身的值返回出来

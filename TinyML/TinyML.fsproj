@@ -10,11 +10,13 @@
         <Compile Include="NamelessStateMachine.fs" />
         <Compile Include="LambdaMachine.fs" />
         <Compile Include="Parser.fs" />
+        <Compile Include="PicoML.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
 
     <ItemGroup>
       <PackageReference Include="FParsec" Version="1.1.1" />
+      <PackageReference Include="FSharp.Compatibility.OCaml" Version="0.1.14" />
     </ItemGroup>
 
 </Project>
