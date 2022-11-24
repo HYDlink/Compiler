@@ -1,18 +1,17 @@
 module TinyML.LambdaMachine
 
-open TinyML.StateMachine
-
 type Expr = 
     | Cst of value: int
-    | Add of left: Expr * right: Expr
-    | Mult of left: Expr * right: Expr
+    // | Add of left: Expr * right: Expr
+    // | Mult of left: Expr * right: Expr
     | Var of name: string
-    | Let of var: string * def: Expr * env: Expr 
+    | Let of var: string * def: Expr * env: Expr
+    | LetRec of var: string * def: Expr * env: Expr
     | Fn of param: string * body: Expr 
     | Apply of func: Expr * arg: Expr
     | BuiltInBiOp of (int -> int -> int)
     | If of Cond: Expr * Then: Expr * Else: Expr
-
+    
 module Expr =
     /// 
     let fnParams (body: Expr) (ps: string list) =
@@ -82,20 +81,49 @@ module VEnv =
     
     let buildInEnv =
         [
-            ("(+)", createBiOpClosure (fun l r -> l + r))
-            ("(*)", createBiOpClosure (fun l r -> l * r))
+            ("(+)", createBiOpClosure (+))
+            ("(-)", createBiOpClosure (-))
+            ("(*)", createBiOpClosure (*))
+            ("(=)", createBiOpClosure (-))
         ]
+
+let applyBiOp op (l, r) =
+    Apply (Apply (Var op, l), r)
+
+let Add =
+    applyBiOp "(+)"
+let Mult =
+    applyBiOp "(*)"
 
 let rec listType : Expr -> (Expr * Type) list =
     function
     | Cst c -> [Cst c, Prim Int]
-    | Add(left, right)
-    | Mult(left, right) -> [ left, Prim Int; right, Prim Int ]
-                          @ (listType left) @ (listType right)
+    // | Add(left, right)
+    // | Mult(left, right) -> [ left, Prim Int; right, Prim Int ]
+    //                       @ (listType left) @ (listType right)
     | Var name -> [ Var name, Generic name ]
     | Let(var, expr, env) -> [ Var var, Generic var ] @ listType expr @ listType env
     | Fn(param, body) -> [ Var param, Generic param ] @ listType body
     | Apply(func, expr) -> []
+
+let rec getFreeVars: Expr -> string Set =
+    function
+    | Cst i -> Set.empty
+    | BuiltInBiOp func -> Set.empty
+    | Var(name) -> Set [name]
+    | Let(name, valueExpr, scope) ->
+        Set.union
+            (getFreeVars valueExpr)
+            (Set.remove name (getFreeVars scope))
+    | Fn (param, body) -> getFreeVars body |> Set.remove param 
+    | Apply(func, arg) -> Set.union (getFreeVars func) (getFreeVars arg)
+    | If(cond, ``then``, ``else``) -> 
+        Set.unionMany
+            [|
+              (getFreeVars cond)
+              (getFreeVars ``then``)
+              (getFreeVars ``else``)
+            |]
 
 let evaluate (expr: Expr) =
     /// Func 需要捕获环境，将捕获了的变量，和自身的值返回出来
@@ -122,6 +150,14 @@ let evaluate (expr: Expr) =
                    let newEnv = (param, argVal) :: venv
                    eval body newEnv
             | _ -> failwith ""
+        | If(cond, ``then``, ``else``) ->
+            match eval cond env with
+            | VClosure _ -> failwith "not correct type for if"
+            | VInt i ->
+                if i = 0 then
+                    eval ``then`` env
+                else
+                    eval ``else`` env
     
     let buildInEnv = List.map (fun (a, b) -> (a, eval b [])) VEnv.buildInEnv
     eval expr buildInEnv
@@ -147,16 +183,6 @@ let rec eval2inst expr curSI (env: NamelessEnv list)  =
     let sndSI = curSI + 1
     match expr with
     | Cst i -> [ Const i ]
-    | Add (l, r) -> 
-        (eval2inst l nextSI env)
-        @
-        (eval2inst r sndSI env)
-        @ [ Addition ]
-    | Mult (l, r ) -> 
-        (eval2inst l nextSI env)
-        @
-        (eval2inst r sndSI env)
-        @ [ Multiply ]
     | Var name -> 
         let v = List.tryFind (fun item -> item.Name = name) env
         match v with

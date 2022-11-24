@@ -2,9 +2,9 @@ using System.Diagnostics;
 
 namespace SyntaxAnalyzer;
 
-public class Utilities
+public static class Utilities
 {
-    public static void ExportDotToSvg(string dot, string name, string format)
+    public static void ExportDotToSvg(this string dot, string name, string format)
     {
         var dot_file = $"{name}.dot";
         var bat_file = $"{name}.bat";

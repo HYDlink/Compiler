@@ -1,6 +1,6 @@
-using System.Diagnostics;
+using QuikGraph;
 
-namespace LuaAnalyzer.IR;
+namespace SyntaxAnalyzer;
 
 public enum OpCode
 {
@@ -56,7 +56,7 @@ public record Op(OpCode OpCode, Operand? Operand1 = null, Operand? Operand2 = nu
     public static bool IsNotLabel(Op op) => op.OpCode != OpCode.Label;
 };
 
-public record BasicBlock(string name, List<Op> Ops);
+public record class BasicBlock(List<Op> Ops, int Start, int End);
 
 public record IRBlock(List<Op> OpCodes)
 {
@@ -65,8 +65,8 @@ public record IRBlock(List<Op> OpCodes)
     public int GetValue(Operand operand) => operand switch
     {
         IntOperand int_operand => int_operand.Value,
-        LabelOperand {Label: {} label} => GetPcByLabel(label),
-        VariableOperand {Variable: {} var} => IrContext.Get(var),
+        LabelOperand { Label: { } label } => GetPcByLabel(label),
+        VariableOperand { Variable: { } var } => IrContext.Get(var),
         _ => throw new ArgumentOutOfRangeException(nameof(operand))
     };
 
@@ -77,15 +77,17 @@ public record IRBlock(List<Op> OpCodes)
 
     public Op? GetOpByLabel(string label)
         => OpCodes.FirstOrDefault(o => o.OpCode == OpCode.Label
-                                  && o.Operand1 is LabelOperand { Label: { } label_operand }
-                                  && label == label_operand);
+                                       && o.Operand1 is LabelOperand { Label: { } label_operand }
+                                       && label == label_operand);
+
     private void Jump(Operand operand)
     {
         var next_pc = GetValue(operand);
         Jump(next_pc);
     }
-    
-    private void Jump(int pc){
+
+    private void Jump(int pc)
+    {
         IrContext.SetPC(pc);
     }
 
@@ -125,7 +127,7 @@ public record IRBlock(List<Op> OpCodes)
                     var op1 = GetValue(op.Operand1);
                     var op2 = GetValue(op.Operand2);
                     var dest = GetValue(op.Dest);
-                    Jump(op1 == 0 ? op2: dest);
+                    Jump(op1 == 0 ? op2 : dest);
                 }
                     break;
                 case OpCode.Jump:
@@ -148,39 +150,66 @@ public record IRBlock(List<Op> OpCodes)
     //     OpCodes.Where(op => op.OpCode == OpCode.Jump)
     // }
 
-    public void ToControlFlowGraph()
+    public AdjacencyGraph<BasicBlock, TaggedEdge<BasicBlock, string>> ToControlFlowGraph()
     {
-        var first_index = OpCodes.FirstOrDefault(Op.IsNotLabel);
-        if (first_index is null)
-            return; // null;
-        List<Op> bb_labels = new() { first_index };
-        List<Op> end_labels = new() { OpCodes.Last(Op.IsNotLabel) };
-        
-        var jump_to = OpCodes.Where(op => op.OpCode != OpCode.Jump).Select(op => op.Dest);
-        var branches = OpCodes.Where(op => op.OpCode != OpCode.Branch);
-        var cond_to = branches.Select(op => op.Operand2).Concat(branches.Select(op => op.Dest));
-        var to_labels = jump_to.Concat(cond_to).ToList();
+        // var first_index = OpCodes.FirstOrDefault(Op.IsNotLabel);
+        var first_index = OpCodes.FindIndex(Op.IsNotLabel);
+        if (first_index is -1)
+            return null;
+        List<int> bb_labels = new() { first_index };
+        // var last_index = OpCodes.Last(Op.IsNotLabel);
+        var last_index = OpCodes.Count - 1;
+        List<int> end_labels = new() { last_index };
+
+        List<(int from, int to, string transition)> transitions = new();
 
         for (int i = 0; i < OpCodes.Count; i++)
         {
             var op = OpCodes[i];
             if (op.OpCode == OpCode.Jump)
             {
-                end_labels.Add(op);
-                var jump_dest = OpCodes[GetValue(op.Dest)];
+                // end_labels.Add(OpCodes[i]);
+                if (i + 1 < OpCodes.Count)
+                    bb_labels.Add(i + 1);
+                var jump_dest = GetValue(op.Dest);
                 bb_labels.Add(jump_dest);
+                transitions.Add((i, jump_dest, "Jump"));
             }
+
             if (op.OpCode == OpCode.Branch)
             {
-                end_labels.Add(op);
-                var j2_dest = OpCodes[GetValue(op.Operand2)];
-                var jump_dest = OpCodes[GetValue(op.Dest)];
+                // end_labels.Add(i);
+                if (i + 1 < OpCodes.Count)
+                    bb_labels.Add(i + 1);
+                var j2_dest = GetValue(op.Operand2);
+                var jump_dest = GetValue(op.Dest);
+                transitions.Add((i, j2_dest, $"{op.Operand1} Success"));
+                transitions.Add((i, jump_dest, $"{op.Operand1} Failed"));
                 bb_labels.Add(j2_dest);
                 bb_labels.Add(jump_dest);
             }
         }
 
-        // return no_label_ops;
+
+        // var non_labels_op = OpCodes.Where(Op.IsNotLabel).ToList();
+        var bb_label_indexes = bb_labels.Distinct()
+            // .Select(b => OpCodes.IndexOf(b))
+            .OrderBy(i => i).ToList();
+        // end_labels = end_labels.Distinct().OrderBy(OpCodes.IndexOf).ToList();
+        var basic_blocks = bb_label_indexes.Zip(bb_label_indexes.Skip(1).Append(last_index + 1))
+            .Select(t =>
+                new BasicBlock(OpCodes.GetRange(t.First, t.Second - t.First), t.First, t.Second - 1))
+            .ToList();
+
+        BasicBlock GetFrom(int i) => basic_blocks.First(b => b.End == i);
+        BasicBlock GetTo(int i) => basic_blocks.First(b => b.Start == i);
+
+        return transitions.Select(t =>
+                new TaggedEdge<BasicBlock, string>(
+                    GetFrom(t.from),
+                    GetTo(t.to),
+                    t.transition))
+            .ToAdjacencyGraph<BasicBlock, TaggedEdge<BasicBlock, string>>();
     }
 }
 

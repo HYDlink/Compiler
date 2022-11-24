@@ -1,4 +1,6 @@
-using LuaAnalyzer.IR;
+using QuikGraph.Graphviz;
+using QuikGraph.Graphviz.Dot;
+using SyntaxAnalyzer;
 
 namespace TestProject;
 
@@ -29,5 +31,17 @@ public class TestIR
         {
             Console.WriteLine($"{key}: {value}");
         }
+
+        var control_flow_graph = block.ToControlFlowGraph();
+        control_flow_graph.ToGraphviz(algorithm =>
+        {
+            algorithm.FormatVertex += (sender, args)
+                =>
+            {
+                args.VertexFormat.Style = GraphvizVertexStyle.Rounded;
+                args.VertexFormat.Label = string.Join('\n', args.Vertex.Ops.Select(o => o.ToString()));
+            };
+            algorithm.FormatEdge += (sender, args) => args.EdgeFormat.Label = new GraphvizEdgeLabel() { Value = args.Edge.Tag };
+        }).ExportDotToSvg(nameof(Example), "svg");
     }
 }

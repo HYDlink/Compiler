@@ -43,7 +43,7 @@ let pApply =
     |>> (fun (value, args) -> List.fold (fun prev next -> Apply(prev, next)) value args)
     <?> "Apply"
 
-let pOperator = (many1 (anyOf "!$%&*+-./<>?@^|")) |>> System.String.Concat
+let pOperator = (many1 (anyOf "!$%&*+-./<>?@^|=")) |>> System.String.Concat
 
 let pOperatorFun =
     withSpaces pPriorityMultiply .>>.? (withSpaces pOperator) .>>. pCalc
@@ -101,6 +101,13 @@ let pLet =
         | _ -> Let (name, (Expr.fnParams definition params), later))
     <?> "Let"
 
+let pIf =
+    tuple3
+        (withSpaces (pstring "if") >>. (withSpaces pExpr))
+        (withSpaces (pstring "then") >>. (withSpaces pExpr))
+        (withSpaces (pstring "else") >>. (withSpaces pExpr))
+    |>> If
+
 pEvaluateRef.Value <-
     choice [ pOperatorFun
              pConst
@@ -111,6 +118,7 @@ pEvaluateRef.Value <-
 
 pExprRef.Value <-
     choice [ pLet
+             pIf
              pOperatorFun
              pConst
              pBrace
@@ -123,6 +131,15 @@ let testExpr parser expr =
     | Success(a, unit, position) ->
         printfn $"Expression: %A{a}"
         testFunc a
+        printfn ""
+    | Failure(s, parserError, unit) ->
+        printfn $"%A{s}"
+
+let testFreeVar expr =
+    match run pExpr expr with
+    | Success(a, unit, position) ->
+        printfn $"Expression: %A{a}"
+        getFreeVars a |> printfn "%A"
         printfn ""
     | Failure(s, parserError, unit) ->
         printfn $"%A{s}"
@@ -151,6 +168,23 @@ add2with3 4
 "
     testExpr pExpr "let (@) x y = x + y * 2
 3 @ 4
+"
+
+let pFreeVar() =
+    testFreeVar "x"
+    testFreeVar "x + y"
+    testFreeVar "let x = 3
+let y = 4
+x + y"
+    testFreeVar "let z x = x + y
+z 3"
+
+let testIf() =
+    testExpr pExpr "let x = 3
+if x = 4 then
+3 + 4
+else
+6 + 7
 "
 
     
