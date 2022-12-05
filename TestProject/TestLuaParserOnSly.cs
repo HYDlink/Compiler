@@ -10,7 +10,7 @@ c = ""Hello""";
 
     const string simple_if = @"a = 3
 if true then
-    a = 4
+    a = true
 end
 ";
 

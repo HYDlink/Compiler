@@ -1,3 +1,4 @@
+using LuaAnalyzer.Infomation;
 using LuaAnalyzer.Syntax;
 using sly.parser;
 using sly.parser.generator;
@@ -23,6 +24,8 @@ public static class Parser
 
         return parser;
     }
+    
+    public static SymbolTableManager SymbolTableManager { get; set; }
 
     public static Block Parse(string script)
     {
@@ -39,7 +42,10 @@ public static class Parser
         }
         else
         {
-            return (Block)r.Result;
+            var result = (Block)r.Result;
+            SymbolTableManager = new();
+            SyntaxParser.ConstructSymbolTable(result, SymbolTableManager);
+            return result;
         }
     }
 }

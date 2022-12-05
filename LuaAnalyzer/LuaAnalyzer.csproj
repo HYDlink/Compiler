@@ -11,6 +11,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <Folder Include="IR" />
       <Folder Include="TypeSystem" />
     </ItemGroup>
 

@@ -1,6 +1,10 @@
 namespace LuaAnalyzer.Syntax;
 
-public record If(Expression Condition, Block Block) : Statement
+public interface IBlockOwner
 {
-    
+    public Block Block { get; set; }
+}
+public record If(Expression Condition) : Statement, IBlockOwner
+{
+    public Block Block { get; set; }
 }

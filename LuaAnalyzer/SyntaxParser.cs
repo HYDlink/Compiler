@@ -1,4 +1,5 @@
-﻿using LuaAnalyzer.Infomation;
+﻿using System.Diagnostics;
+using LuaAnalyzer.Infomation;
 using LuaAnalyzer.Syntax;
 using sly.lexer;
 using sly.parser.generator;
@@ -9,31 +10,69 @@ using Tok = Token<LexToken>;
 
 public class SyntaxParser
 {
-    public Stack<Block> ProcessingBlocks = new();
-    public List<string> StringTables = new();
+    #region SymbolTable Management
+
+    public SymbolTableManager SymbolTableManager = new();
+    
+    public static void ConstructSymbolTable(Block block, SymbolTableManager symbolTableManager)
+    {
+        symbolTableManager.InitializeScope();
+        var current_table = symbolTableManager.CurrentTable;
+
+        // construct for current layer assignment
+        Debug.Assert(current_table != null);
+        foreach (var assign_statement in block.Statements.OfType<AssignStatement>())
+        {
+            var type = assign_statement.Expression.Type;
+            var id = assign_statement.Id;
+            var layer = current_table.Name;
+            if (symbolTableManager.Get(id) is ({ } table, { } symbol_item))
+            {
+                layer = table.Name;
+                if (symbol_item.Type != type)
+                {
+                    Console.WriteLine($"assign wrong for {id}");
+                }
+
+                Console.WriteLine($"assign multiple times for {id}");
+            }
+            else
+            {
+                symbolTableManager.Set(id, type);
+            }
+
+            assign_statement.SymbolLayerName = layer;
+        }
+
+        // construct for child blocks
+        var blocks_in_owner = block.Statements.OfType<IBlockOwner>().Select(ib => ib.Block);
+        var direct_child_blocks = block.Statements.OfType<Block>();
+        var child_blocks = direct_child_blocks.Concat(blocks_in_owner);
+        foreach (var child_block in child_blocks)
+        {
+            ConstructSymbolTable(child_block, symbolTableManager);
+        }
+        
+        symbolTableManager.PopScope();
+    }
+
+    #endregion
 
     #region Statement
 
     // TODO how to start block, before statement being processing
     //  how to input Epsilon preserved code
-    [Production("Block: BlockStart[d] Statement+")]
+    [Production("Block: Statement+")]
     public Block Block(List<AST> statements)
     {
-        return new Block(new SymbolTable(), statements.Cast<Statement>().ToList());
-    }
-
-    [Production("BlockStart:")]
-    public AST BlockStart()
-    {
-        var block = new Block(new SymbolTable(), new());
-        ProcessingBlocks.Push(block);
-        return block;
+        var actual_statements = statements.Cast<Statement>().ToList();
+        return new Block(actual_statements);
     }
 
     [Production("If: IF[d] Expression THEN[d] Block END[d]")]
     public If If(Expression condition, Block block)
     {
-        return new If(condition, block);
+        return new If(condition) { Block = block };
     }
 
     [Production("AssignStatement: IDENTIFIER ASSIGN Expression")]
@@ -43,12 +82,11 @@ public class SyntaxParser
     }
 
     [Production("Statement: [If | AssignStatement]")]
-     public Statement Statement(Statement statement)
+    public Statement Statement(Statement statement)
         => statement;
 
-    
-
     #endregion
+
     // [Production("BinOp: PLUS")]
 
     #region Literal
@@ -70,7 +108,7 @@ public class SyntaxParser
         };
         return new BoolLiteral(value);
     }
-    
+
     [Production("IntLiteral: INT")]
     public IntLiteral Int(Tok str)
     {
@@ -87,5 +125,4 @@ public class SyntaxParser
     [Production("Expression: Literal")]
     public Expression Expression(Literal literal)
         => new Expression(literal);
-    
 }
