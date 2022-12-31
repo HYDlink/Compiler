@@ -1,3 +1,5 @@
+using System.Data;
+using System.Runtime.Serialization;
 using QuikGraph;
 using QuikGraph.Algorithms;
 
@@ -35,9 +37,27 @@ public record CfgNode(string Value, CfgNodeType Type)
 
 public class CfgProduction : List<CfgNode>
 {
+    public static readonly CfgProduction Epsilon = new();
+    public bool IsEpsilon => Count == 0;
     public string Name { get; set; }
+
     public override string ToString()
-        => string.Join(' ', this);
+        => IsEpsilon
+            ? "ε"
+            : string.Join(' ', this);
+
+    public IEnumerable<string> LastNonEpsilonVariables(IEnumerable<string> canBeEpsilon)
+    {
+        foreach (var (value, type) in Enumerable.Reverse(this))
+        {
+            if (type == CfgNodeType.Terminal)
+                yield break;
+            if (type == CfgNodeType.NonTerminal)
+                yield return value;
+            if (!canBeEpsilon.Contains(value))
+                yield break;
+        }
+    }
 }
 
 public record CfgRule(string Variable, List<CfgProduction> Productions)
@@ -51,16 +71,15 @@ public record CfgRule(string Variable, List<CfgProduction> Productions)
 
     public override string ToString()
     {
-        return $"{Variable} -> {string.Join("\n\t| ", Productions)}";
+        return $"{Variable} → {string.Join("\n\t| ", Productions)}";
     }
 }
 
-public record class ShiftedCfgRule(string Variable, List<CfgProduction> Productions, int Shift) 
+public record class ShiftedCfgRule(string Variable, List<CfgProduction> Productions, int Shift)
     : CfgRule(Variable, Productions)
 {
     public ShiftedCfgRule(CfgRule rule, int shift) : this(rule.Variable, rule.Productions, shift)
     {
-        
     }
 }
 
@@ -89,12 +108,18 @@ public static class CfgRuleExtension
     public static AdjacencyGraph<List<ShiftedCfgRule>, TaggedEdge<List<ShiftedCfgRule>, CfgNode>>
         ExportDk(this List<CfgRule> rules)
     {
-        
         throw new NotImplementedException();
     }
+
+    public static List<string> GetAllTerminal(this List<CfgRule> cfgRules)
+        => cfgRules.SelectMany(r =>
+                r.Productions.SelectMany(p => p)
+                    .Where(n => n.Type == CfgNodeType.Terminal)
+                    .Select(n => n.Value))
+            .Distinct().ToList();
 }
 
 public record class ContextFreeGrammar(string Name, List<CfgRule> Rules)
 {
-    
+    public string? RootRule;
 }
