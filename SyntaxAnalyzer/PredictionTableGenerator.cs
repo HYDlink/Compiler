@@ -74,6 +74,8 @@ public class PredictionTableGenerator
         return neighbors;
     }
 
+    private const bool EnableDebug = false;
+
     public static Dictionary<string, HashSet<string>> SolveFollow(List<CfgRule> rules, HashSet<string> canBeEpsilon,
         Dictionary<string, HashSet<string>> firstTable)
     {
@@ -157,7 +159,7 @@ public class PredictionTableGenerator
         {
             changed = AddLast() || AddNeighbor();
 
-            if (false) // enable_debug
+            if (EnableDebug)
             {
                 Console.WriteLine($"Iteration {iter}, Changed: {changed}");
                 foreach (var (key, value) in followTable)
@@ -241,11 +243,15 @@ public class PredictionTableGenerator
             }
         }
 
-        Console.WriteLine($"To solve relation: ");
-        foreach (var (key, va) in to_solve)
+        if (EnableDebug)
         {
-            Console.WriteLine($"\t{key} -> {string.Join(", ", va)}");
+            Console.WriteLine($"To solve relation: ");
+            foreach (var (key, va) in to_solve)
+            {
+                Console.WriteLine($"\t{key} -> {string.Join(", ", va)}");
+            }
         }
+        
         var changed = true;
         var iter = 0;
         while (changed)
@@ -274,7 +280,7 @@ public class PredictionTableGenerator
                 
             }
             
-            if (false) // enable_debug
+            if (EnableDebug)
             {
                 Console.WriteLine($"Iteration {iter}, Changed: {changed}");
                 foreach (var (key, value) in first_table)
@@ -349,7 +355,6 @@ public class PredictionTableGenerator
     public PredictionTable Gen(string rootRule)
     {
         canBeEpsilon = SolveEpsilon(CfgRules);
-        Console.WriteLine($"Epsilon rules: " + string.Join(", ",canBeEpsilon));
         
         SolveFirst();
         // Dfs(rootRule);
@@ -357,7 +362,11 @@ public class PredictionTableGenerator
         follow_table = SolveFollow(CfgRules, canBeEpsilon, first_table);
         AddFollowToEpsilonProd();
         var validate_ll1 = ValidateLl1();
-        Console.WriteLine($"is LL1: {validate_ll1}");
+        if (EnableDebug)
+        {
+            Console.WriteLine($"Epsilon rules: " + string.Join(", ", canBeEpsilon));
+            Console.WriteLine($"is LL1: {validate_ll1}");
+        }
         return new()
         {
             FirstTable = first_table,

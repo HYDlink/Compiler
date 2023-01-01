@@ -7,11 +7,12 @@ public class SyntaxNode
     public int Length { get; set; }
     
     public string NodeType { get; set; }
+    public CfgNode CfgNode { get; set; }
     public string Id { get; set; }
 
     public override string ToString()
     {
-        return $"<{Input.Substring(Index, Length)}, {NodeType}>";
+        return $"<{Input}, {CfgNode.Value}>";
     }
 
     public List<SyntaxNode> Children { get; set; } = new();
