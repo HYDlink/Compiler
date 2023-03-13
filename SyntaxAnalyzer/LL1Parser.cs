@@ -56,12 +56,14 @@ public class LL1Parser
                 }
 
                 var success = true;
+                var to_add = new List<SyntaxNode>();
                 foreach (var node in Enumerable.Reverse(production))
                 {
                     var syntax_node = processed_stack.Pop();
                     if (syntax_node.CfgNode == node)
                     {
-                        cur_node.Children.Add(syntax_node);
+                        // 这个也会成为反向的样子
+                        to_add.Add(syntax_node);
                     }
                     else
                     {
@@ -72,6 +74,7 @@ public class LL1Parser
                     }
                 }
 
+                cur_node.Children.AddRange(Enumerable.Reverse(to_add));
                 if (success)
                     processed_stack.Push(cur_node);
 

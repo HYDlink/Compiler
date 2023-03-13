@@ -1,4 +1,6 @@
-﻿namespace SyntaxAnalyzer;
+﻿using QuikGraph;
+
+namespace SyntaxAnalyzer;
 
 public class SyntaxNode
 {
@@ -10,9 +12,13 @@ public class SyntaxNode
     public CfgNode CfgNode { get; set; }
     public string Id { get; set; }
 
+    public bool OnlyNode => string.IsNullOrEmpty(Input);
+
     public override string ToString()
     {
-        return $"<{Input}, {CfgNode.Value}>";
+        return string.IsNullOrEmpty(Input)
+            ? $"{CfgNode.Value}"
+            : Input;
     }
 
     public List<SyntaxNode> Children { get; set; } = new();
@@ -24,6 +30,23 @@ public class SyntaxNode
 
     public void Print() {
         PrintRecursive();
+    }
+
+    public AdjacencyGraph<SyntaxNode, TaggedEdge<SyntaxNode, string>> ToGraph()
+    {
+        List<TaggedEdge<SyntaxNode, string>> Edges = new();
+
+        void RecursiveAdd(SyntaxNode node)
+        {
+            foreach (var syntax_node in node.Children)
+            {
+                Edges.Add(new TaggedEdge<SyntaxNode, string>(node, syntax_node, ""));
+                RecursiveAdd(syntax_node);
+            }
+        }
+        
+        RecursiveAdd(this);
+        return Edges.ToAdjacencyGraph<SyntaxNode, TaggedEdge<SyntaxNode, string>>();
     }
 }
 

@@ -3,10 +3,12 @@ using LuaAnalyzer.Infomation;
 using LuaAnalyzer.Syntax;
 using sly.lexer;
 using sly.parser.generator;
+using sly.parser.parser;
 
 namespace LuaAnalyzer;
 
 using Tok = Token<LexToken>;
+using static LexToken;
 
 public class SyntaxParser
 {
@@ -69,19 +71,29 @@ public class SyntaxParser
         return new Block(actual_statements);
     }
 
-    [Production("If: IF[d] Expression THEN[d] Block END[d]")]
-    public If If(Expression condition, Block block)
+    [Production($"If: IF[d] Expression THEN[d] {nameof(Block)} END[d]")]
+    public If If(LiteralExpression condition, Block block)
     {
         return new If(condition) { Block = block };
     }
 
-    [Production("AssignStatement: IDENTIFIER ASSIGN Expression")]
-    public Statement AssignStatement(Tok idToken, Tok assign, Expression expression)
+    [Production($"AssignStatement: {nameof(LOCAL)}? {nameof(IDENTIFIER)} {nameof(ASSIGN)}[d] Expression")]
+    public Statement AssignStatement(ValueOption<Tok> isLocal, Tok idToken, Expression literalExpression)
     {
-        return new AssignStatement(idToken.Value, expression);
+        return new AssignStatement(isLocal.IsSome, idToken.Value, literalExpression);
     }
 
-    [Production("Statement: [If | AssignStatement]")]
+    [Production($"{nameof(FuncDefineStatement)}: {nameof(LOCAL)}? {nameof(FUNCTION)}[d] {nameof(ASSIGN)}[d] {nameof(Block)}")]
+    public FuncDefineStatement FuncDefineStatement(ValueOption<Tok> isLocal, Tok idToken, Block block)
+    {
+        return new FuncDefineStatement(isLocal.IsSome, idToken.Value, block);
+    }
+
+    [Production($"{nameof(FuncCallStatement)} : {nameof(FuncCall)}")]
+    public FuncCallStatement FuncCallStatement(FuncCall funcCall)
+        => new FuncCallStatement(funcCall);
+
+    [Production($"Statement: [{nameof(If)} | {nameof(AssignStatement)} | {nameof(FuncCallStatement)}]")]
     public Statement Statement(Statement statement)
         => statement;
 
@@ -121,8 +133,17 @@ public class SyntaxParser
 
     #endregion
 
+    [Production($"{nameof(Expression)}: [{nameof(LiteralExpression)} | {nameof(FuncCall)} | {nameof(IdExpression)}]")]
+    public Expression Expression(AST ast) => (Expression)ast;
 
-    [Production("Expression: Literal")]
-    public Expression Expression(Literal literal)
-        => new Expression(literal);
+    [Production($"{nameof(IdExpression)}: {nameof(IDENTIFIER)}")]
+    public IdExpression IdExpression(Tok idTok) => new IdExpression(idTok.Value);
+
+    [Production("LiteralExpression: Literal")]
+    public LiteralExpression LiteralExpression(Literal literal)
+        => new LiteralExpression(literal);
+
+    [Production($"{nameof(FuncCall)}: {nameof(IDENTIFIER)} {nameof(LPAREN)}[d] {nameof(Expression)}* {nameof(RPAREN)}[d]")]
+    public FuncCall FuncCall(Token<LexToken> idTok, List<AST> args)
+        => new FuncCall(idTok.Value, args.Cast<Expression>().ToList());
 }

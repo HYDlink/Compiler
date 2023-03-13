@@ -21,7 +21,7 @@ public enum LexToken
     [Keyword("do")]
     DO = 5,
 
-    [Keyword( "skip")]
+    [Keyword("skip")]
     SKIP = 6,
 
     [Keyword("true")]
@@ -39,11 +39,14 @@ public enum LexToken
     [Keyword("or")]
     OR = 11,
 
-    [Keyword("print")]
-    PRINT = 12,
-    
     [Keyword("end")]
-    END = 13,
+    END = 12,
+    
+    [Keyword("local")]
+    LOCAL = 13,
+    
+    [Keyword("function")]
+    FUNCTION = 14,
 
     #endregion
 
@@ -92,6 +95,8 @@ public enum LexToken
 
     [Sugar( ";")] SEMICOLON = 52,
 
+    [Comment("--", "[[", "]]")]
+    COMMENT = 53,
     // EOF = 0
 
     #endregion

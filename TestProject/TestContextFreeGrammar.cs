@@ -1,6 +1,7 @@
 using AsciiTableFormatter;
 using QuikGraph;
 using QuikGraph.Graphviz;
+using QuikGraph.Graphviz.Dot;
 using SyntaxAnalyzer;
 using TextTableFormatter;
 using static SyntaxAnalyzer.CfgNode;
@@ -164,9 +165,36 @@ public class TestContextFreeGrammar
     public void TestLL1()
     {
         var ll1_parser = new LL1Parser(RightRecursiveCfg);
-        ll1_parser.Parse("a", "F");
-        ll1_parser.Parse("a+a", "E");
-        // ll1_parser.Parse("a+a*a");
+        TestParse(ll1_parser, "a", "F");
+        TestParse(ll1_parser, "a+a", "E");
+        TestParse(ll1_parser, "a+a*a", "E");
+    }
+
+    [Test]
+    [TestCase("a", "F")]
+    [TestCase("a+a", "E")]
+    [TestCase("a+a*a", "E")]
+    public void TestCalculateLL1(string input, string rule)
+    {
+        var ll1_parser = new LL1Parser(RightRecursiveCfg);
+        TestParse(ll1_parser, input, rule);
+    }
+
+    void TestParse(LL1Parser parser, string input, string rule)
+    {
+        var syntax_node = parser.Parse(input, rule);
+        syntax_node?.Print();
+        var dot = syntax_node.ToGraph().ToGraphviz(algorithm =>
+        {
+            algorithm.FormatVertex += (_, args) =>
+            {
+                args.VertexFormat.Shape = args.Vertex.OnlyNode ? GraphvizVertexShape.Box : GraphvizVertexShape.Circle;
+                args.VertexFormat.Label = args.Vertex.ToString();
+            };
+        });
+        var random = new Random();
+        var rand_str = new string(Enumerable.Range(0, 6).Select(ch => (char)random.Next('a', 'z')).ToArray());
+        dot.ExportDotToSvg(rand_str, "svg");
     }
 
     [Test]

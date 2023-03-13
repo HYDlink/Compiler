@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using LuaAnalyzer.Syntax;
 
 namespace LuaAnalyzer.Infomation;
 
@@ -23,7 +24,7 @@ public class SymbolTable
         return SymbolItems.FirstOrDefault(s => s.Id == id);
     }
 
-    public void Set(string id, string type)
+    public void Set(string id, LuaType type)
     {
         if (Get(id) is { } item)
         {
@@ -84,7 +85,7 @@ public class SymbolTableManager
         return (cur_table, item);
     }
 
-    public void Set(string id, string type)
+    public void Set(string id, LuaType type)
     {
         CurrentTable.Set(id, type);
         Console.WriteLine($"Set <{id}, {type}> in {CurrentTable.Name}");

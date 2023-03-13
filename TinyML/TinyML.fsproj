@@ -12,6 +12,8 @@
         <Compile Include="Parser.fs" />
         <Compile Include="PicoML.fs" />
         <Compile Include="TinyProlog.fs" />
+        <Compile Include="ParseLrc.fs" />
+        <Compile Include="SimplyTypedLambda.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
 
